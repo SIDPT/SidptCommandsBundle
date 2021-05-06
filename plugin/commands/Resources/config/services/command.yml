@@ -1,0 +1,25 @@
+services:
+    _defaults:
+        autowire: false
+        autoconfigure: false
+
+    Sidpt\CommandsBundle\Command\SidptDataLoadCommand:
+        arguments:
+            - '@Claroline\AppBundle\Persistence\ObjectManager'
+            - '@Claroline\AppBundle\API\Crud'
+            - '@Claroline\AppBundle\API\SerializerProvider'
+            - '@Claroline\AppBundle\API\FinderProvider'
+            - '@Claroline\CoreBundle\Manager\Organization\OrganizationManager'
+            - '@Claroline\TagBundle\Manager\TagManager'
+            - '@Claroline\CoreBundle\Manager\RoleManager'
+            - '@Claroline\CoreBundle\Manager\Workspace\WorkspaceManager'
+            - '@Claroline\CoreBundle\Manager\ResourceManager'
+        tags:
+            - { name: 'console.command', command: 'sidpt:data:load' }
+
+    Sidpt\CommandsBundle\Command\MakeResetPasswordURLCommand:
+        arguments:
+            - '@Claroline\CoreBundle\Manager\UserManager'
+            - '@router'
+        tags:
+            - { name: 'console.command', command: 'sidpt:user:password-reset-url' }
