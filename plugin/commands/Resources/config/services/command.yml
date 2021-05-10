@@ -3,6 +3,13 @@ services:
         autowire: false
         autoconfigure: false
 
+    Sidpt\CommandsBundle\Command\ExportTranslationsCommand:
+        arguments:
+            - '@Claroline\CoreBundle\Manager\PluginManager'
+            - '@service_container'
+        tags:
+            - { name: 'console.command', command: 'sidpt:translations:export' }
+
     Sidpt\CommandsBundle\Command\SidptDataLoadCommand:
         arguments:
             - '@Claroline\AppBundle\Persistence\ObjectManager'
