@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup ipip platform
+ConditionFileIsExecutable=/var/webapp/backup-claroline.sh
+After=mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/var/webapp/backup-claroline.sh %i
+
+[Install]
+WantedBy=multi-user.target
