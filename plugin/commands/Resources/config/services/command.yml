@@ -10,7 +10,7 @@ services:
         tags:
             - { name: 'console.command', command: 'sidpt:translations:export' }
 
-    Sidpt\CommandsBundle\Command\SidptDataLoadCommand:
+    Sidpt\CommandsBundle\Command\SidptDataFormatCommand:
         arguments:
             - '@Claroline\AppBundle\Persistence\ObjectManager'
             - '@Claroline\AppBundle\API\Crud'
@@ -22,7 +22,7 @@ services:
             - '@Claroline\CoreBundle\Manager\Workspace\WorkspaceManager'
             - '@Claroline\CoreBundle\Manager\ResourceManager'
         tags:
-            - { name: 'console.command', command: 'sidpt:data:load' }
+            - { name: 'console.command', command: 'sidpt:data:format' }
 
     Sidpt\CommandsBundle\Command\MakeResetPasswordURLCommand:
         arguments:
