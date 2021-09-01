@@ -193,7 +193,139 @@ class SidptDataFormatCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        
+        return $this->september2021Update1($input, $output);
+    }
+
+    /**
+     * September update 2 : update all document descriptions
+     * that match the old format with the new one
+     * @param  InputInterface  $input  [description]
+     * @param  OutputInterface $output [description]
+     * @return [type]                  [description]
+     */
+    protected function september2021Update1(InputInterface $input, OutputInterface $output): int
+    {
+        $documents = $this->resourceNodeRepo->findBy(
+            ['mimeType' => 'custom/sidpt_document']
+        );
+
+        foreach ($documents as $key => $documentNode) {
+            $description = $documentNode->getDescription();
+            $docIsLU = false;
+            $learningOutcomeContent = <<<HTML
+                <p><span style="color: #ff0000;"><strong>Author, please fill this section</strong></span></p>
+                HTML;
+                // update previous description
+            if (!empty($description)) {
+                // original template
+                $searchedOutcome = explode(
+                    "<h3>Learning outcome</h3>",
+                    $description
+                );
+                if (count($searchedOutcome) > 1) {
+                    $docIsLU = true;
+                    $learningOutcomeContent = explode(
+                        "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
+                        $searchedOutcome[1]
+                    )[0];
+                    $learningOutcomeContent = trim($learningOutcomeContent);
+                    $learningOutcomeContent = substr(
+                        $learningOutcomeContent,
+                        0,
+                        strlen($learningOutcomeContent)
+                    );
+                } else {
+                    // template v2
+                    // (translations)
+                    $searchedOutcome = explode(
+                        "<h3>{trans('Learning outcome','clarodoc')}</h3>",
+                        $description
+                    );
+                    if (count($searchedOutcome) > 1) {
+                        $docIsLU = true;
+                        $learningOutcomeContent = explode(
+                            "<p id=\"disclaimer-start\">",
+                            $searchedOutcome[1]
+                        )[0];
+                        $learningOutcomeContent = trim($learningOutcomeContent);
+                    }
+                }
+            }
+            if ($docIsLU) {
+                $learningUnitDocument = $this->resourceManager
+                    ->getResourceFromNode($documentNode);
+
+                $learningUnitDocument->setShowOverview(true);
+                $learningUnitDocument->setWidgetsPagination(true);
+                // updated description template
+                $documentNode->setDescription(
+                    <<<HTML
+<table class="table table-striped table-hover table-condensed data-table" style="height: 133px; width: 100%; border-collapse: collapse; margin-left: auto; margin-right: auto;" border="1" cellspacing="5px" cellpadding="20px">
+<tbody>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('Learning unit','clarodoc')}</td>
+<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.slug}}">{{ resource.resourceNode.name }}</a></td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('Module','clarodoc')}</td>
+<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-2].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-2].slug}}">{{ resource.resourceNode.path[-2].name }}</a></td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('Course','clarodoc')}</td>
+<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-3].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-3].slug}}">{{ resource.resourceNode.path[-3].name }}</a></td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('Who is it for?','clarodoc')}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{childrenNames}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('What is included?','clarodoc')}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{childrenNames}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('How long will it take?','clarodoc')}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{childrenNames}}{{/resource.resourceNode.tags["time-frame"]}}</td>
+</tr>
+<tr style="height: 19px;">
+<td style="width: 50%; height: 19px;">{trans('Last updated','clarodoc')}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.meta.updated}}{{formatDate}}{{/resource.resourceNode.meta.updated}}</td>
+</tr>
+</tbody>
+</table>
+<h3>{trans('Learning outcome','clarodoc')}</h3>
+{$learningOutcomeContent}
+<p id="disclaimer-start">{{#resource.resourceNode.tags["disclaimer"] }}</p>
+<h3>{trans('Disclaimer','clarodoc')}</h3>
+<p class="p1">{trans('This learning unit contains images that may not be accessible to some learners. This content is used to support learning. Whenever possible the information presented in the images is explained in the text.','clarodoc')}</p>
+<p>{{/resource.resourceNode.tags["disclaimer"] }}</p>
+HTML //end of document
+                );
+
+                $this->om->persist($documentNode);
+                $this->om->persist($learningUnitDocument);
+                $user = $documentNode->getCreator();
+                $requiredKnowledgeNode = $this->addOrUpdateDocumentSubObject(
+                    $user,
+                    $documentNode,
+                    "Required knowledge",
+                    $this->directoryType,
+                    false
+                );
+                $learningUnitDocument->setRequiredResourceNodeTreeRoot($requiredKnowledgeNode);
+                $this->om->persist($learningUnitDocument);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * August update 1 : replace all LU binders by document
+     * @param  InputInterface  $input  [description]
+     * @param  OutputInterface $output [description]
+     * @return [type]                  [description]
+     */
+    protected function august2021Update1(InputInterface $input, OutputInterface $output): int
+    {
         
         // 26/08/2021
         // - for each document placed under a binder
@@ -239,17 +371,12 @@ class SidptDataFormatCommand extends Command
                                 $searchedOutcome[1]
                             )[0];
                             $learningOutcomeContent = trim($learningOutcomeContent);
-                            $learningOutcomeContent = substr(
-                                $learningOutcomeContent,
-                                3,
-                                strlen($learningOutcomeContent) - 4
-                            );
                         } else {
                             // template v2
-                            // (translations + identified p
+                            // (translations
                             //  for outcome and disclaimer start)
                             $searchedOutcome = explode(
-                                "<p id=\"outcome-start\">",
+                                "<h3>{trans('Learning outcome','clarodoc')}</h3>",
                                 $description
                             );
                             if (count($searchedOutcome) > 1) {
@@ -258,11 +385,6 @@ class SidptDataFormatCommand extends Command
                                     $searchedOutcome[1]
                                 )[0];
                                 $learningOutcomeContent = trim($learningOutcomeContent);
-                                $learningOutcomeContent = substr(
-                                    $learningOutcomeContent,
-                                    0,
-                                    strlen($learningOutcomeContent) - 4
-                                );
                             }
                         }
                     }
@@ -285,15 +407,15 @@ class SidptDataFormatCommand extends Command
 </tr>
 <tr style="height: 19px;">
 <td style="width: 50%; height: 19px;">{trans('Who is it for?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{keys}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{childrenNames}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
 </tr>
 <tr style="height: 19px;">
 <td style="width: 50%; height: 19px;">{trans('What is included?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{keys}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{childrenNames}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
 </tr>
 <tr style="height: 19px;">
 <td style="width: 50%; height: 19px;">{trans('How long will it take?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{keys}}{{/resource.resourceNode.tags["time-frame"]}}</td>
+<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{childrenNames}}{{/resource.resourceNode.tags["time-frame"]}}</td>
 </tr>
 <tr style="height: 19px;">
 <td style="width: 50%; height: 19px;">{trans('Last updated','clarodoc')}</td>
@@ -302,7 +424,7 @@ class SidptDataFormatCommand extends Command
 </tbody>
 </table>
 <h3>{trans('Learning outcome','clarodoc')}</h3>
-<p id="outcome-start">{$learningOutcomeContent}</p>
+{$learningOutcomeContent}
 <p id="disclaimer-start">{{#resource.resourceNode.tags["disclaimer"] }}</p>
 <h3>{trans('Disclaimer','clarodoc')}</h3>
 <p class="p1">{trans('This learning unit contains images that may not be accessible to some learners. This content is used to support learning. Whenever possible the information presented in the images is explained in the text.','clarodoc')}</p>
@@ -318,7 +440,8 @@ HTML //end of document
                         $user,
                         $documentNode,
                         "Required knowledge",
-                        $this->directoryType
+                        $this->directoryType,
+                        false
                     );
                     $learningUnitDocument->setRequiredResourceNodeTreeRoot($requiredKnowledgeNode);
                     $this->om->persist($learningUnitDocument);
@@ -422,27 +545,27 @@ HTML //end of document
         }
 
         return 0;
-        
     }
+
 
     public function addOrUpdateDocumentSubObject(
         $user,
         $documentNode,
-        $nodeName,
+        $subnodeName,
         $resourceType,
         $withWidget = true
     ) {
         $document = $this->resourceManager->getResourceFromNode($documentNode);
         $subNode = $this->resourceNodeRepo->findOneBy(
             [
-                'name' => $nodeName,
+                'name' => $subnodeName,
                 'parent'=>$documentNode->getId(),
                 'resourceType' => $resourceType->getId()
             ]
         );
         if (empty($subNode)) {
             $subNode = new ResourceNode();
-            $subNode->setName($nodeName);
+            $subNode->setName($subnodeName);
             $subNode->setWorkspace($documentNode->getWorkspace());
             $subNode->setResourceType($resourceType);
             $subNode->setParent($documentNode);
@@ -453,13 +576,13 @@ HTML //end of document
             $resourceclass = $resourceType->getClass();
             $subResource = new $resourceclass();
             $subResource->setResourceNode($subNode);
-            $subResource->setName($nodeName);
+            $subResource->setName($subnodeName);
 
             if ($resourceType->getName() == "ujm_exercise") {
-                if ($nodeName == "Practice") {
+                if ($subnodeName == "Practice") {
                     $subResource->setType(ExerciseType::CONCEPTUALIZATION);
                     $subResource->setScoreRule(json_encode(["type" => "none"]));
-                } else if ($nodeName == "Assessment") {
+                } else if ($subnodeName == "Assessment") {
                     $subResource->setType(ExerciseType::SUMMATIVE);
                     $subResource->setScoreRule(json_encode(["type" => "sum"]));
                 }
@@ -470,7 +593,7 @@ HTML //end of document
             $this->om->persist($document);
 
             if ($withWidget) {
-                $this->addResourceWidget($document, $subNode, $nodeName);
+                $this->addResourceWidget($document, $subNode, $subnodeName);
             }
         } else { // Update the document or node
             // Update the underlying resource
@@ -496,20 +619,27 @@ HTML //end of document
                     'resourceNode' => $subNode->getId()
                 ]
             );
-            if (!empty($subNodeWidgets)) {
+            if (!empty($subNodeWidgets)) { // widget was found
                 foreach ($subNodeWidgets as $widget) {
                     $widget->setShowResourceHeader(false);
                     $instance = $widget->getWidgetInstance();
                     $container = $instance->getContainer();
-                    $containerConfig = $container->getWidgetContainerConfigs()->first();
-                    $containerConfig->setName($nodeName);
+                    if (!$withWidget) { // widget is no more requested
+                        // remove the widget container
+                        $this->om->remove($container);
+                        $this->om->remove($instance);
+                        $this->om->remove($widget);
+                    } else {
+                        $containerConfig = $container->getWidgetContainerConfigs()->first();
+                        $containerConfig->setName($subnodeName);
 
-                    $this->om->persist($widget);
+                        $this->om->persist($widget);
+                    }
                 }
             } elseif ($withWidget) {
                 // subnode is alledgedly used in a widget but was not found
                 // So we add it
-                $this->addResourceWidget($document, $subNode, $nodeName);
+                $this->addResourceWidget($document, $subNode, $subnodeName);
             }
         }
         $this->om->flush();
