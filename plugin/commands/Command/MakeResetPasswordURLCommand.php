@@ -11,18 +11,12 @@
 
 namespace Sidpt\CommandsBundle\Command;
 
+use Claroline\CoreBundle\Manager\UserManager;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Question\Question;
-
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-
-use Claroline\AppBundle\Command\BaseCommandTrait;
-use Claroline\CoreBundle\Manager\UserManager;
-use Claroline\CoreBundle\Entity\User as UserEntity;
 
 /**
  * create a password reset URL to reset a user password.
@@ -30,12 +24,7 @@ use Claroline\CoreBundle\Entity\User as UserEntity;
  */
 class MakeResetPasswordURLCommand extends Command
 {
-    use BaseCommandTrait;
-   
-    private $params = [
-        'user_username' => 'username'
-    ];
-    
+
     private $usermanager;
     private $router;
 
@@ -52,7 +41,11 @@ class MakeResetPasswordURLCommand extends Command
     protected function configure()
     {
         $this->setDescription('Generate a password reset url for a user.');
-        $this->configureParams();
+        $this->addArgument(
+            'user_username',
+            InputArgument::REQUIRED,
+            sprintf('Username that needs to generate password url ')
+        );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -60,16 +53,16 @@ class MakeResetPasswordURLCommand extends Command
         $username = $input->getArgument('user_username');
         $user = $this->usermanager->getUserByUsername($username);
         if ($user === null) {
-            throw new Exception("Username ".$username." not found.", 1);
+            throw new Exception("Username " . $username . " not found.", 1);
         }
-        
+
         $this->usermanager->initializePassword($user);
         $hash = $user->getResetPasswordHash();
         $link = $this->router->generate(
             'claro_index',
             [],
             UrlGeneratorInterface::ABSOLUTE_URL
-        )."#/newpassword/{$hash}";
+        ) . "#/newpassword/{$hash}";
 
         $output->writeln($link);
         return 0;
