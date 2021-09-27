@@ -163,7 +163,55 @@ class SidptDataFormatCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        return $this->september2021Update2($input, $output);
+        return $this->september2021Update3($input, $output);
+    }
+
+    /**
+     * - do not display unpublished resource in widgets
+     * @param  InputInterface  $input                [description]
+     * @param  OutputInterface $output               [description]
+     * @return int                     [description]
+     */
+    protected function september2021Update3(InputInterface $input, OutputInterface $output): int
+    {
+        $documents = $this->resourceNodeRepo->findBy(
+            ['mimeType' => 'custom/sidpt_document']
+        );
+
+        foreach ($documents as $key => $documentNode) {
+            print("Document - " . $documentNode->getName() . "\r\n");
+            $description = $documentNode->getDescription();
+            $document = $this->resourceManager
+                ->getResourceFromNode($documentNode);
+
+            if(!empty($document)){
+              $containers = $document->getWidgetContainers();
+              foreach ($containers as $key => $container) {
+                $instances = $container->getInstances();
+                foreach ($instances as $key => $instance) {
+                  if($instance->getDataSource() == $this->resourcesListDataSource){
+                    $widget = $this->listWidgetsRepo->findOneBy(
+                        [
+                            "widgetInstance" => $instance->getId(),
+                        ]
+                    );
+                    if(!empty($widget)){
+                      $filters = $widget->getFilters();
+                      $filters[] = [
+                          "property" => "published",
+                          "value" => true,
+                          "locked" => true,
+                      ];
+                      $widget->setFilters($filters);
+                      $this->om->persist($widget);
+                    }
+                  }
+                }
+              }
+            }
+            $this->om->flush();
+        }
+        return 0;
     }
 
     /**
@@ -178,7 +226,7 @@ class SidptDataFormatCommand extends Command
      * @param  OutputInterface $output [description]
      * @return [type]                  [description]
      */
-    protected function september2021Update2(InputInterface $input, OutputInterface $output): int
+    protected function september2021Update2(InputInterface $input, OutputInterface $output) : int
     {
         $documents = $this->resourceNodeRepo->findBy(
             ['mimeType' => 'custom/sidpt_document']
