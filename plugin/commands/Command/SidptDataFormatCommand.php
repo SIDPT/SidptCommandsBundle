@@ -163,16 +163,16 @@ class SidptDataFormatCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        return $this->september2021Update3($input, $output);
+        return $this->october2021Update1($input, $output);
     }
 
     /**
-     * - do not display unpublished resource in widgets
+     * - Some translations or description fields were missed in previous cleaning
      * @param  InputInterface  $input                [description]
      * @param  OutputInterface $output               [description]
      * @return int                     [description]
      */
-    protected function september2021Update3(InputInterface $input, OutputInterface $output): int
+    protected function october2021Update1(InputInterface $input, OutputInterface $output): int
     {
         $documents = $this->resourceNodeRepo->findBy(
             ['mimeType' => 'custom/sidpt_document']
@@ -184,29 +184,99 @@ class SidptDataFormatCommand extends Command
             $document = $this->resourceManager
                 ->getResourceFromNode($documentNode);
 
-            if(!empty($document)){
-              $containers = $document->getWidgetContainers();
-              foreach ($containers as $key => $container) {
-                $instances = $container->getInstances();
-                foreach ($instances as $key => $instance) {
-                  if($instance->getDataSource() == $this->resourcesListDataSource){
-                    $widget = $this->listWidgetsRepo->findOneBy(
-                        [
-                            "widgetInstance" => $instance->getId(),
-                        ]
-                    );
-                    if(!empty($widget)){
-                      $filters = $widget->getFilters();
-                      $filters[] = [
-                          "property" => "published",
-                          "value" => true,
-                          "locked" => true,
-                      ];
-                      $widget->setFilters($filters);
-                      $this->om->persist($widget);
-                    }
+            if(!empty($document) && !empty($description)){
+              $docIsLU = false;
+              // original template
+              $searchedOutcome = explode(
+                  "<h3>Learning outcome</h3>",
+                  $description
+              );
+              if (count($searchedOutcome) > 1) {
+                  $docIsLU = true;
+                  $learningOutcomeContent = explode(
+                      "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
+                      $searchedOutcome[1]
+                  )[0];
+                  $learningOutcomeContent = trim($learningOutcomeContent);
+                  $learningOutcomeContent = substr(
+                      $learningOutcomeContent,
+                      0,
+                      strlen($learningOutcomeContent)
+                  );
+              } else {
+                  // template v2
+                  // (translations)
+                  $searchedOutcome = explode(
+                      "<h3>{trans('Learning outcome','clarodoc')}</h3>",
+                      $description
+                  );
+                  if (count($searchedOutcome) > 1) {
+                      $docIsLU = true;
+                      $learningOutcomeContent = explode(
+                          "<p id=\"disclaimer-start\">",
+                          $searchedOutcome[1]
+                      )[0];
+                      $learningOutcomeContent = trim($learningOutcomeContent);
                   }
-                }
+              }
+
+              if($docIsLU){
+                // only keep outcomes in description
+                $documentNode->setDescription($learningOutcomeContent);
+              }
+              // Update translations of description
+              $contentTranslations = $this->translations->getAllTranslations(
+                  $documentNode
+              );
+              foreach ($contentTranslations as $key => $contentTranslation) {
+                  if ($contentTranslation->getField() == 'description') {
+                      $description = $contentTranslation->getContent();
+                      $docIsLU = false;
+                      $learningOutcomeContent = <<<HTML
+              <p><span style="color: #ff0000;"><strong>Author, please fill the outcomes in the resource description</strong></span></p>
+              HTML;
+                      // update previous description
+                      if (!empty($description)) {
+                          print("LU Description translation for " . $contentTranslation->getLocale() . "\r\n");
+                          // original template
+                          $searchedOutcome = explode(
+                              "<h3>Learning outcome</h3>",
+                              $description
+                          );
+                          if (count($searchedOutcome) > 1) {
+                              $docIsLU = true;
+                              $learningOutcomeContent = explode(
+                                  "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
+                                  $searchedOutcome[1]
+                              )[0];
+                              $learningOutcomeContent = trim($learningOutcomeContent);
+                              $learningOutcomeContent = substr(
+                                  $learningOutcomeContent,
+                                  0,
+                                  strlen($learningOutcomeContent)
+                              );
+                          } else {
+                              // template v2
+                              // (translations)
+                              $searchedOutcome = explode(
+                                  "<h3>{trans('Learning outcome','clarodoc')}</h3>",
+                                  $description
+                              );
+                              if (count($searchedOutcome) > 1) {
+                                  $docIsLU = true;
+                                  $learningOutcomeContent = explode(
+                                      "<p id=\"disclaimer-start\">",
+                                      $searchedOutcome[1]
+                                  )[0];
+                                  $learningOutcomeContent = trim($learningOutcomeContent);
+                              }
+                          }
+                          if ($docIsLU) {
+                              $contentTranslation->setContent($learningOutcomeContent);
+                              $this->om->persist($contentTranslation);
+                          }
+                      }
+                  }
               }
             }
             $this->om->flush();
@@ -214,607 +284,7 @@ class SidptDataFormatCommand extends Command
         return 0;
     }
 
-    /**
-     * September update 2 :
-     * - Learning units description now only contains the learning outcomes
-     * - Overview is more customizable to possibly include
-     *   - an intro message,
-     *   - the description with a specific title
-     *   - a disclaimer message
-     *
-     * @param  InputInterface  $input  [description]
-     * @param  OutputInterface $output [description]
-     * @return [type]                  [description]
-     */
-    protected function september2021Update2(InputInterface $input, OutputInterface $output) : int
-    {
-        $documents = $this->resourceNodeRepo->findBy(
-            ['mimeType' => 'custom/sidpt_document']
-        );
-        $moduleToUpdate = [];
-
-        foreach ($documents as $key => $documentNode) {
-            print("Document - " . $documentNode->getName() . "\r\n");
-            $description = $documentNode->getDescription();
-            $documentResource = $this->resourceManager
-                ->getResourceFromNode($documentNode);
-
-            $docIsLU = $documentResource != null ? $documentResource->getDescriptionTitle() == <<<HTML
-<h3>{trans('Learning outcomes','clarodoc')}</h3>
-HTML:false;
-            $learningOutcomeContent = <<<HTML
-                <p><span style="color: #ff0000;"><strong>Author, please fill the outcomes in the resource description</strong></span></p>
-                HTML;
-            // update previous description
-            if (!empty($description)) {
-                // original template
-                $searchedOutcome = explode(
-                    "<h3>Learning outcomes</h3>",
-                    $description
-                );
-                if (count($searchedOutcome) > 1) {
-                    $docIsLU = true;
-                    $learningOutcomeContent = explode(
-                        "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
-                        $searchedOutcome[1]
-                    )[0];
-                    $learningOutcomeContent = trim($learningOutcomeContent);
-                    $learningOutcomeContent = substr(
-                        $learningOutcomeContent,
-                        0,
-                        strlen($learningOutcomeContent)
-                    );
-                } else {
-                    // template v2
-                    // (translations)
-                    $searchedOutcome = explode(
-                        "<h3>{trans('Learning outcome','clarodoc')}</h3>",
-                        $description
-                    );
-                    if (count($searchedOutcome) > 1) {
-                        $docIsLU = true;
-                        $learningOutcomeContent = explode(
-                            "<p id=\"disclaimer-start\">",
-                            $searchedOutcome[1]
-                        )[0];
-                        $learningOutcomeContent = trim($learningOutcomeContent);
-                    }
-                }
-            }
-            if ($docIsLU) {
-                print("LU - " . $documentNode->getName() . "\r\n");
-                $parent = $documentNode->getParent();
-                $moduleToUpdate[$parent->getId()] = $parent;
-                $learningUnitDocument = $this->resourceManager
-                    ->getResourceFromNode($documentNode);
-
-                $learningUnitDocument->setShowOverview(true);
-                $learningUnitDocument->setOverviewMessage(
-                    <<<HTML
-<table class="table table-striped table-hover table-condensed data-table" style="height: 133px; width: 100%; border-collapse: collapse; margin-left: auto; margin-right: auto;" border="1" cellspacing="5px" cellpadding="20px">
-<tbody>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Learning unit','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.slug}}">{{ resource.resourceNode.name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Module','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-2].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-2].slug}}">{{ resource.resourceNode.path[-2].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Course','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-3].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-3].slug}}">{{ resource.resourceNode.path[-3].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Who is it for?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{childrenNames}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('What is included?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{childrenNames}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('How long will it take?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{childrenNames}}{{/resource.resourceNode.tags["time-frame"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Last updated','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.meta.updated}}{{formatDate}}{{/resource.resourceNode.meta.updated}}</td>
-</tr>
-</tbody>
-</table>
-HTML
-                );
-
-                $learningUnitDocument->setShowDescription(true);
-                $learningUnitDocument->setDisclaimer(
-                    <<<HTML
-<p id="disclaimer-start">{{#resource.resourceNode.tags["disclaimer"] }}</p>
-<h3>{trans('Disclaimer','clarodoc')}</h3>
-<p class="p1">{trans('This learning unit contains images that may not be accessible to some learners. This content is used to support learning. Whenever possible the information presented in the images is explained in the text.','clarodoc')}</p>
-<p>{{/resource.resourceNode.tags["disclaimer"] }}</p>
-HTML
-                );
-
-                $learningUnitDocument->setWidgetsPagination(true);
-                // updated description template
-                $learningUnitDocument->setDescriptionTitle(
-                    <<<HTML
-<h3>{trans('Learning outcomes','clarodoc')}</h3>
-HTML
-                );
-                $documentNode->setDescription($learningOutcomeContent);
-
-                $this->om->persist($documentNode);
-                $this->om->persist($learningUnitDocument);
-                $user = $documentNode->getCreator();
-                $requiredKnowledgeNode = $this->addOrUpdateDocumentSubObject(
-                    $user,
-                    $documentNode,
-                    "Required knowledge",
-                    $this->directoryType,
-                    false
-                );
-
-                // Update translations of description
-                $contentTranslations = $this->translations->getAllTranslations(
-                    $documentNode
-                );
-                foreach ($contentTranslations as $key => $contentTranslation) {
-                    if ($contentTranslation->getField() == 'description') {
-                        $description = $contentTranslation->getContent();
-                        $docIsLU = false;
-                        $learningOutcomeContent = <<<HTML
-                <p><span style="color: #ff0000;"><strong>Author, please fill the outcomes in the resource description</strong></span></p>
-                HTML;
-                        // update previous description
-                        if (!empty($description)) {
-                            print("LU Description translation for " . $contentTranslation->getLocale() . "\r\n");
-                            // original template
-                            $searchedOutcome = explode(
-                                "<h3>Learning outcomes</h3>",
-                                $description
-                            );
-                            if (count($searchedOutcome) > 1) {
-                                $docIsLU = true;
-                                $learningOutcomeContent = explode(
-                                    "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
-                                    $searchedOutcome[1]
-                                )[0];
-                                $learningOutcomeContent = trim($learningOutcomeContent);
-                                $learningOutcomeContent = substr(
-                                    $learningOutcomeContent,
-                                    0,
-                                    strlen($learningOutcomeContent)
-                                );
-                            } else {
-                                // template v2
-                                // (translations)
-                                $searchedOutcome = explode(
-                                    "<h3>{trans('Learning outcomes','clarodoc')}</h3>",
-                                    $description
-                                );
-                                if (count($searchedOutcome) > 1) {
-                                    $docIsLU = true;
-                                    $learningOutcomeContent = explode(
-                                        "<p id=\"disclaimer-start\">",
-                                        $searchedOutcome[1]
-                                    )[0];
-                                    $learningOutcomeContent = trim($learningOutcomeContent);
-                                }
-                            }
-                            if ($docIsLU) {
-                                $contentTranslation->setContent($learningOutcomeContent);
-                                $this->om->persist($contentTranslation);
-                            }
-                        }
-                    }
-                }
-
-                $learningUnitDocument->setRequiredResourceNodeTreeRoot($requiredKnowledgeNode);
-                $this->om->persist($learningUnitDocument);
-            }
-        }
-        $this->om->flush();
-
-        // Update Modules
-        // - update the learning units list widget to display
-        // the name and description columns
-        $courseToUpdate = [];
-        foreach ($moduleToUpdate as $id => $moduleNode) {
-            $parent = $moduleNode->getParent();
-            if (!empty($parent) && $parent->getResourceType() == $this->documentType) {
-                $courseToUpdate[$parent->getId()] = $parent;
-            }
-
-            print("Module - " . $moduleNode->getName() . "\r\n");
-
-            $moduleNode->setResourceType($this->documentType);
-            $moduleNode->setMimeType("custom/sidpt_document");
-            $this->om->persist($moduleNode);
-
-            $moduleDocument = $this->resourceManager
-                ->getResourceFromNode($moduleNode);
-
-            $moduleDocument->setShowOverview(false);
-            $moduleDocument->setWidgetsPagination(false);
-
-            $this->addOrUpdateResourceListWidget($moduleDocument, $moduleNode, "Learning units");
-            $this->om->persist($moduleDocument);
-            $this->om->persist($moduleNode);
-            $this->om->flush();
-        }
-
-        // Update Courses
-        // - update the Module list widget to display
-        // the name and description columns
-        foreach ($courseToUpdate as $id => $courseNode) {
-            print("Course - " . $courseNode->getName() . "\r\n");
-
-            $courseDocument = $this->resourceManager
-                ->getResourceFromNode($courseNode);
-            $courseDocument->setShowOverview(false);
-            $courseDocument->setWidgetsPagination(false);
-
-            $this->addOrUpdateResourceListWidget($courseDocument, $courseNode, "Modules");
-            $this->om->persist($courseDocument);
-            $this->om->persist($courseNode);
-            $this->om->flush();
-        }
-
-        return 0;
-    }
-
-    /**
-     * September update 2 : update all document descriptions
-     * that match the old format with the new one
-     * @param  InputInterface  $input  [description]
-     * @param  OutputInterface $output [description]
-     * @return [type]                  [description]
-     */
-    protected function september2021Update1(InputInterface $input, OutputInterface $output) : int
-    {
-        $documents = $this->resourceNodeRepo->findBy(
-            ['mimeType' => 'custom/sidpt_document']
-        );
-
-        foreach ($documents as $key => $documentNode) {
-            $description = $documentNode->getDescription();
-            $docIsLU = false;
-            $learningOutcomeContent = <<<HTML
-                <p><span style="color: #ff0000;"><strong>Author, please fill this section</strong></span></p>
-                HTML;
-            // update previous description
-            if (!empty($description)) {
-                // original template
-                $searchedOutcome = explode(
-                    "<h3>Learning outcome</h3>",
-                    $description
-                );
-                if (count($searchedOutcome) > 1) {
-                    $docIsLU = true;
-                    $learningOutcomeContent = explode(
-                        "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
-                        $searchedOutcome[1]
-                    )[0];
-                    $learningOutcomeContent = trim($learningOutcomeContent);
-                    $learningOutcomeContent = substr(
-                        $learningOutcomeContent,
-                        0,
-                        strlen($learningOutcomeContent)
-                    );
-                } else {
-                    // template v2
-                    // (translations)
-                    $searchedOutcome = explode(
-                        "<h3>{trans('Learning outcome','clarodoc')}</h3>",
-                        $description
-                    );
-                    if (count($searchedOutcome) > 1) {
-                        $docIsLU = true;
-                        $learningOutcomeContent = explode(
-                            "<p id=\"disclaimer-start\">",
-                            $searchedOutcome[1]
-                        )[0];
-                        $learningOutcomeContent = trim($learningOutcomeContent);
-                    }
-                }
-            }
-            if ($docIsLU) {
-                $learningUnitDocument = $this->resourceManager
-                    ->getResourceFromNode($documentNode);
-
-                $learningUnitDocument->setShowOverview(true);
-                $learningUnitDocument->setWidgetsPagination(true);
-                // updated description template
-                $documentNode->setDescription(
-                    <<<HTML
-<table class="table table-striped table-hover table-condensed data-table" style="height: 133px; width: 100%; border-collapse: collapse; margin-left: auto; margin-right: auto;" border="1" cellspacing="5px" cellpadding="20px">
-<tbody>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Learning unit','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.slug}}">{{ resource.resourceNode.name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Module','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-2].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-2].slug}}">{{ resource.resourceNode.path[-2].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Course','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-3].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-3].slug}}">{{ resource.resourceNode.path[-3].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Who is it for?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{childrenNames}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('What is included?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{childrenNames}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('How long will it take?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{childrenNames}}{{/resource.resourceNode.tags["time-frame"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Last updated','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.meta.updated}}{{formatDate}}{{/resource.resourceNode.meta.updated}}</td>
-</tr>
-</tbody>
-</table>
-<h3>{trans('Learning outcome','clarodoc')}</h3>
-{$learningOutcomeContent}
-<p id="disclaimer-start">{{#resource.resourceNode.tags["disclaimer"] }}</p>
-<h3>{trans('Disclaimer','clarodoc')}</h3>
-<p class="p1">{trans('This learning unit contains images that may not be accessible to some learners. This content is used to support learning. Whenever possible the information presented in the images is explained in the text.','clarodoc')}</p>
-<p>{{/resource.resourceNode.tags["disclaimer"] }}</p>
-HTML//end of document
-                );
-
-                $this->om->persist($documentNode);
-                $this->om->persist($learningUnitDocument);
-                $user = $documentNode->getCreator();
-                $requiredKnowledgeNode = $this->addOrUpdateDocumentSubObject(
-                    $user,
-                    $documentNode,
-                    "Required knowledge",
-                    $this->directoryType,
-                    false
-                );
-                $learningUnitDocument->setRequiredResourceNodeTreeRoot($requiredKnowledgeNode);
-                $this->om->persist($learningUnitDocument);
-            }
-        }
-        return 0;
-    }
-
-    /**
-     * August update 1 : replace all LU binders by document
-     * @param  InputInterface  $input  [description]
-     * @param  OutputInterface $output [description]
-     * @return [type]                  [description]
-     */
-    protected function august2021Update1(InputInterface $input, OutputInterface $output): int
-    {
-
-        // 26/08/2021
-        // - for each document placed under a binder
-        $documents = $this->resourceNodeRepo->findBy(
-            ['mimeType' => 'custom/sidpt_document']
-        );
-        $moduleToUpdate = [];
-        foreach ($documents as $key => $documentNode) {
-            $parent = $documentNode->getParent();
-            if (!empty($parent)
-                && $parent->getResourceType() == $this->binderType
-            ) {
-                print("LU - " . $documentNode->getName() . "\r\n");
-                // if it is an old module or course summary, delete it
-                if ($documentNode->getName() == "Summary") {
-                    $this->om->remove($documentNode);
-                } else {
-                    // I assume that it is an old learning unit
-                    // keep module binder to be replaced by a document
-                    $moduleToUpdate[$parent->getId()] = $parent;
-                    $user = $documentNode->getCreator();
-                    // Reset/Update learning unit
-                    $learningUnitDocument = $this->resourceManager
-                        ->getResourceFromNode($documentNode);
-
-                    $learningUnitDocument->setShowOverview(true);
-                    $learningUnitDocument->setWidgetsPagination(true);
-                    $description = $documentNode->getDescription();
-
-                    $learningOutcomeContent = <<<HTML
-                    <span style="color: #ff0000;"><strong>Author, please fill this section</strong></span>
-                    HTML;
-                    // update previous description
-                    if (!empty($description)) {
-                        // original template
-                        $searchedOutcome = explode(
-                            "<h3>Learning outcome</h3>",
-                            $description
-                        );
-                        if (count($searchedOutcome) > 1) {
-                            $learningOutcomeContent = explode(
-                                "<p>{{#resource.resourceNode.tags[\"Disclaimer\"] }}</p>",
-                                $searchedOutcome[1]
-                            )[0];
-                            $learningOutcomeContent = trim($learningOutcomeContent);
-                        } else {
-                            // template v2
-                            // (translations
-                            //  for outcome and disclaimer start)
-                            $searchedOutcome = explode(
-                                "<h3>{trans('Learning outcome','clarodoc')}</h3>",
-                                $description
-                            );
-                            if (count($searchedOutcome) > 1) {
-                                $learningOutcomeContent = explode(
-                                    "<p id=\"disclaimer-start\">",
-                                    $searchedOutcome[1]
-                                )[0];
-                                $learningOutcomeContent = trim($learningOutcomeContent);
-                            }
-                        }
-                    }
-                    // updated description template
-                    $documentNode->setDescription(
-                        <<<HTML
-<table class="table table-striped table-hover table-condensed data-table" style="height: 133px; width: 100%; border-collapse: collapse; margin-left: auto; margin-right: auto;" border="1" cellspacing="5px" cellpadding="20px">
-<tbody>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Learning unit','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.slug}}">{{ resource.resourceNode.name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Module','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-2].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-2].slug}}">{{ resource.resourceNode.path[-2].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Course','clarodoc')}</td>
-<td class="text-left string-cell" style="width: 50%; height: 19px;"><a id="{{ resource.resourceNode.path[-3].slug }}" class="list-primary-action default" href="#/desktop/workspaces/open/{{resource.resourceNode.workspace.slug}}/resources/{{resource.resourceNode.path[-3].slug}}">{{ resource.resourceNode.path[-3].name }}</a></td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Who is it for?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["professional-profile"]}}{{childrenNames}}{{/resource.resourceNode.tags["professional-profile"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('What is included?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["included-resource-type"]}}{{childrenNames}}{{/resource.resourceNode.tags["included-resource-type"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('How long will it take?','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.tags["time-frame"]}}{{childrenNames}}{{/resource.resourceNode.tags["time-frame"]}}</td>
-</tr>
-<tr style="height: 19px;">
-<td style="width: 50%; height: 19px;">{trans('Last updated','clarodoc')}</td>
-<td style="width: 50%; height: 19px;">{{#resource.resourceNode.meta.updated}}{{formatDate}}{{/resource.resourceNode.meta.updated}}</td>
-</tr>
-</tbody>
-</table>
-<h3>{trans('Learning outcome','clarodoc')}</h3>
-{$learningOutcomeContent}
-<p id="disclaimer-start">{{#resource.resourceNode.tags["disclaimer"] }}</p>
-<h3>{trans('Disclaimer','clarodoc')}</h3>
-<p class="p1">{trans('This learning unit contains images that may not be accessible to some learners. This content is used to support learning. Whenever possible the information presented in the images is explained in the text.','clarodoc')}</p>
-<p>{{/resource.resourceNode.tags["disclaimer"] }}</p>
-HTML//end of document
-                    );
-
-                    $this->om->persist($documentNode);
-                    $this->om->persist($learningUnitDocument);
-
-                    $requiredKnowledgeNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "Required knowledge",
-                        $this->directoryType,
-                        false
-                    );
-                    $learningUnitDocument->setRequiredResourceNodeTreeRoot($requiredKnowledgeNode);
-                    $this->om->persist($learningUnitDocument);
-
-                    $practiceNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "Practice",
-                        $this->exerciseType
-                    );
-                    $theoryNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "Theory",
-                        $this->lessonType
-                    );
-                    $assessmentNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "Assessment",
-                        $this->exerciseType
-                    );
-                    $activityNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "Activity",
-                        $this->textType
-                    );
-                    $referencesNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $documentNode,
-                        "References",
-                        $this->documentType
-                    );
-
-                    $referencesDocument = $this->resourceManager->getResourceFromNode($referencesNode);
-
-                    $externalReferencesNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $referencesNode,
-                        "External references",
-                        $this->textType
-                    );
-                    $internalReferencesNode = $this->addOrUpdateDocumentSubObject(
-                        $user,
-                        $referencesNode,
-                        "IPIP references",
-                        $this->directoryType
-                    );
-
-                }
-                $this->om->flush();
-            }
-        }
-
-        $courseToUpdate = [];
-        foreach ($moduleToUpdate as $id => $moduleNode) {
-            $parent = $moduleNode->getParent();
-            if (!empty($parent)
-                && $parent->getResourceType() == $this->binderType
-            ) {
-                $courseToUpdate[$parent->getId()] = $parent;
-            }
-
-            print("Module - " . $moduleNode->getName() . "\r\n");
-
-            $moduleNode->setResourceType($this->documentType);
-            $moduleNode->setMimeType("custom/sidpt_document");
-            $this->om->persist($moduleNode);
-
-            $moduleDocument = new Document();
-            $moduleDocument->setResourceNode($moduleNode);
-
-            $moduleDocument->setName($moduleNode->getName());
-            $moduleDocument->setShowOverview(false);
-            $moduleDocument->setWidgetsPagination(false);
-
-            $this->addOrUpdateResourceListWidget($moduleDocument, $moduleNode, "Learning units");
-            $this->om->persist($moduleDocument);
-            $this->om->persist($moduleNode);
-            $this->om->flush();
-        }
-
-        foreach ($courseToUpdate as $id => $courseNode) {
-            print("Course - " . $courseNode->getName() . "\r\n");
-            $courseNode->setResourceType($this->documentType);
-            $courseNode->setMimeType("custom/sidpt_document");
-            $this->om->persist($courseNode);
-
-            $courseDocument = new Document();
-            $courseDocument->setResourceNode($courseNode);
-
-            $courseDocument->setName($courseNode->getName());
-            $courseDocument->setShowOverview(false);
-            $courseDocument->setWidgetsPagination(false);
-
-            $this->addOrUpdateResourceListWidget($courseDocument, $courseNode, "Modules");
-            $this->om->persist($courseDocument);
-            $this->om->persist($courseNode);
-            $this->om->flush();
-        }
-
-        return 0;
-    }
-
+    
     public function addOrUpdateDocumentSubObject(
         $user,
         $documentNode,
