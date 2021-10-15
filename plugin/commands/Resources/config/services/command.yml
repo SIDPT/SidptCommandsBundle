@@ -13,15 +13,10 @@ services:
     Sidpt\CommandsBundle\Command\SidptDataFormatCommand:
         arguments:
             - '@Claroline\AppBundle\Persistence\ObjectManager'
-            - '@Claroline\AppBundle\API\Crud'
             - '@Claroline\AppBundle\API\SerializerProvider'
-            - '@Claroline\AppBundle\API\FinderProvider'
-            - '@Claroline\CoreBundle\Manager\Organization\OrganizationManager'
             - '@Claroline\TagBundle\Manager\TagManager'
-            - '@Claroline\CoreBundle\Manager\RoleManager'
-            - '@Claroline\CoreBundle\Manager\Workspace\WorkspaceManager'
             - '@Claroline\CoreBundle\Manager\ResourceManager'
-            - '@Claroline\CoreBundle\Manager\ContentTranslationManager'
+            - '@Sidpt\BinderBundle\API\Manager\DocumentManager'
         tags:
             - { name: 'console.command', command: 'sidpt:data:format' }
 
