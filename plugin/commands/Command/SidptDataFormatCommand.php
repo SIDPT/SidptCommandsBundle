@@ -159,6 +159,7 @@ class SidptDataFormatCommand extends Command
           ['mimeType' => 'custom/sidpt_document']
       );
       $modules = [];
+      $count = 0;
       foreach ($documents as $key => $documentNode) {
           print("Document - " . $documentNode->getName() . "\r\n");
           $document = $this->resourceManager->getResourceFromNode($documentNode);
@@ -176,8 +177,14 @@ class SidptDataFormatCommand extends Command
               $this->documentManager->configureAsLearningUnit($document, false);
             }
           }
+          $count += 1;
+          if ($count % 10 === 0) {
+            $this->om->flush();
+          }
       }
+      $this->om->flush();
 
+      $count = 0;
       $courses = [];
       foreach ($modules as $key => $documentNode) {
           print("Module - " . $documentNode->getName() . "\r\n");
@@ -194,7 +201,15 @@ class SidptDataFormatCommand extends Command
           }
           $this->documentManager->configureAsModule($document, false);
           //}
+          //
+          $count += 1;
+          if ($count % 10 === 0) {
+            $this->om->flush();
+          }
       }
+      $this->om->flush();
+
+      $count = 0;
 
       foreach ($courses as $key => $documentNode) {
           print("Course - " . $documentNode->getName() . "\r\n");
@@ -206,6 +221,11 @@ class SidptDataFormatCommand extends Command
 
           $this->documentManager->configureAsCourse($document, false);
           //}
+          //}
+          $count += 1;
+          if ($count % 10 === 0) {
+            $this->om->flush();
+          }
       }
 
       $this->om->flush();
