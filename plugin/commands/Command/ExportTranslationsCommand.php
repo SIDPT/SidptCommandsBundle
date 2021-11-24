@@ -23,6 +23,7 @@ use Symfony\Component\DependencyInjection\Container;
 class ExportTranslationsCommand extends Command
 {
     const BASE_LANG = 'fr';
+    const DEFAULT_LOCALES = ['fr','en','nl','de','es'];
 
     private $pluginManager;
     private $container;
@@ -42,7 +43,7 @@ class ExportTranslationsCommand extends Command
         $this->setName('sidpt:export:translations')
             ->setDescription('Export translations fields and value per local.')
             ->addArgument('csv_path', InputArgument::REQUIRED, 'file path to save the export in.')
-            ->addArgument('locale_list', InputArgument::REQUIRED, 'list of locale to select, separated by spaces. List must be enclosed indouble quotes');
+            ->addArgument('locale_list', InputArgument::OPTIONAL, 'list of locale to select, separated by spaces. List must be enclosed indouble quotes');
 
         $this->addOption(
             'undefined',
@@ -76,12 +77,12 @@ class ExportTranslationsCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        // TODO 
+        // TODO
         // get all translations file
         // sort translation file by Bundle, Domain and locale
         //For each bundle
         //  if(!array_key_exists(bundle, translations)) translation[bundle] = array
-        //  
+        //
         //  for each domain
         //     if(!array_key_exists(domain,translation[bundle])) translation[bundle][domain] = array
         //     for each targeted local, if there is a translation file
@@ -124,11 +125,16 @@ class ExportTranslationsCommand extends Command
         }
         $csv_path = $input->getArgument('csv_path');
         $csv_file = fopen($csv_path, "w");
-        $locales = explode(" ", $input->getArgument('locale_list'));
+        $localesList = $input->getArgument('locale_list');
+        if($localesList){
+          $locales = explode(" ", $localesList);
+        } else {
+          $locales = self::DEFAULT_LOCALES;
+        }
 
         $missingsFilter = $input->getOption('missing');
         $undefinedFilter = $input->getOption('undefined');
-        
+
         try {
             $headers = array_merge(["bundle","domain","field"], $locales);
             fputcsv($csv_file, $headers, ";");
@@ -149,7 +155,7 @@ class ExportTranslationsCommand extends Command
                         ) {
                             fputcsv($csv_file, $fields, ";");
                         }
-                        
+
                         // $line = "{$bundle};{$domain};{$field};";
                         // foreach ($localeTranslations as $locale => $translation) {
                         //     $line .= "{$locale} = {$translation};";
@@ -181,7 +187,7 @@ class ExportTranslationsCommand extends Command
 
     private function getTranslationFilesByBundles()
     {
-
+        // all bundles extending PluginBundles
         $bundles = $this->pluginManager->getInstalledBundles();
         $translationFiles = [];
 
@@ -193,9 +199,8 @@ class ExportTranslationsCommand extends Command
                 $translationFiles[$shortName] = $this->parseDirectoryTranslationFiles($shortName);
             }
         }
-
-        //then we need to add the corebundle
-        $translationFiles['ClarolineCoreBundle'] = $this->parseDirectoryTranslationFiles($shortName);
+        // App bundle is not a plugin bundles but is hosting translations
+        $translationFiles['ClarolineAppBundle'] = $this->parseDirectoryTranslationFiles('ClarolineAppBundle');
 
         return $translationFiles;
     }
@@ -308,7 +313,7 @@ class ExportTranslationsCommand extends Command
         } catch (\Exception $e) {
             $this->output->writeln($shortName." - ".$e->getMessage());
         }
-        
+
         return $translationFiles;
     }
 
@@ -329,7 +334,7 @@ class ExportTranslationsCommand extends Command
                 }
             }
         }
-        
+
 
         $output->writeln('<comment> Displaying duplicate translations result: </comment>');
 
