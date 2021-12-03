@@ -40,7 +40,7 @@ class ExportTranslationsCommand extends Command
 
     protected function configure()
     {
-        $this->setName('sidpt:export:translations')
+        $this->setName('sidpt:translations:export')
             ->setDescription('Export translations fields and value per local.')
             ->addArgument('csv_path', InputArgument::REQUIRED, 'file path to save the export in.')
             ->addArgument('locale_list', InputArgument::OPTIONAL, 'list of locale to select, separated by spaces. List must be enclosed indouble quotes');

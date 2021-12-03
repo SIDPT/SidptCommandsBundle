@@ -10,6 +10,13 @@ services:
         tags:
             - { name: 'console.command', command: 'sidpt:translations:export' }
 
+    Sidpt\CommandsBundle\Command\ImportTranslationsCommand:
+        arguments:
+            - '@Claroline\CoreBundle\Manager\PluginManager'
+            - '@service_container'
+        tags:
+            - { name: 'console.command', command: 'sidpt:translations:import' }
+
     Sidpt\CommandsBundle\Command\SidptDataFormatCommand:
         arguments:
             - '@Claroline\AppBundle\Persistence\ObjectManager'
