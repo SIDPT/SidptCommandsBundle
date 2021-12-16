@@ -147,7 +147,10 @@ class ExportTranslationsCommand extends Command
                         foreach ($locales as $key => $locale) {
                             $complete = $complete && isset($localeTranslations[$locale]);
                             $hasTranslations = $hasTranslations || isset($localeTranslations[$locale]);
-                            $fields[] = $localeTranslations[$locale] ?? " ";
+                            // we need to double escape backslash to avoid csv reading errors when there is \\ fields ...
+                            // fputcsv and freadcsv are not escaping everything correctly...
+                            $fields[] = !empty($localeTranslations[$locale]) ? str_replace('\\','\\\\',$localeTranslations[$locale]) : '';
+
                         }
                         if (!($undefinedFilter || $missingsFilter)
                             || (!$hasTranslations && $undefinedFilter)

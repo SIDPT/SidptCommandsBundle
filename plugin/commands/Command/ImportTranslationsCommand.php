@@ -117,18 +117,21 @@ private function array_merge_recursive_distinct()
     {
         $this->output = $output;
         $csv_path = $input->getArgument('csv_path');
-        $rows   = array_map(
-          function ($data) {
-            return str_getcsv($data,';');
-          }, file($csv_path)
-        );
+        $rows = array();
+        if (($handle = fopen($csv_path, "r")) !== FALSE) {
+            while (($data = fgetcsv($handle, 0, ";")) !== FALSE) {
+                $rows[] = $data;
+            }
+            fclose($handle);
+        }
         $header = array_shift($rows);
+
+
         $csv    = array();
 
         foreach($rows as $row) {
            $csv[] = array_combine($header, $row);
         }
-
         $localesList = array_diff($header, ['bundle','domain', 'field']);
 
         // current translations available by
@@ -154,7 +157,9 @@ private function array_merge_recursive_distinct()
                       if (!empty($translations)) {
                         $flattenedFields = $this->flatten($translations, ".");
                         foreach ($flattenedFields as $field => $value) {
+                          if($value !=""){ // avoid empty fields
                             $fieldsTranslations[$bundle][$domain][$locale][$field] = $value;
+                          }
                         }
                       }
                     } catch (\Exception $e){
@@ -170,9 +175,11 @@ private function array_merge_recursive_distinct()
             $bundle = $row['bundle'];
             $domain = $row['domain'];
             $field = $row['field'];
-
+            $this->output->writeln(
+               $bundle." - ". $domain.' - '.$field
+            );
             foreach($localesList as $locale){
-              $rowLocaledata = trim($row[$locale], " \t\n\r\0\x0B\xC2\xA0");
+              $rowLocaledata = str_replace('\\\\','\\',$row[$locale]);//trim(, " \t\n\r\0\x0B\xC2\xA0");
               if(!empty($rowLocaledata)){
 
                 if (!array_key_exists($locale, $fieldsTranslations[$bundle][$domain])) {
@@ -222,7 +229,7 @@ private function array_merge_recursive_distinct()
                         }
                       }catch(\Exception $e){
                         $this->output->writeln($translationDir.'/'.$domain.'.'.$locale.'.json'." - ".$e->getMessage());
-                        //$this->output->writeln("Data not written : \r\n".print_r($fieldsInLocale,true));
+                        $this->output->writeln("Data not written : \r\n".print_r($fieldsInLocale,true));
                       }
                   }
               }
