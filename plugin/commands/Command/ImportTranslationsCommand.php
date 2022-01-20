@@ -119,7 +119,7 @@ private function array_merge_recursive_distinct()
         $csv_path = $input->getArgument('csv_path');
         $rows = array();
         if (($handle = fopen($csv_path, "r")) !== FALSE) {
-            while (($data = fgetcsv($handle, 0, ";")) !== FALSE) {
+            while (($data = fgetcsv($handle, 0)) !== FALSE) {
                 $rows[] = $data;
             }
             fclose($handle);
