@@ -155,34 +155,66 @@ class SidptDataFormatCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+
+      print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
+      gc_enable();
       $documents = $this->resourceNodeRepo->findBy(
           ['mimeType' => 'custom/sidpt_document']
       );
+      $LUs = [];
+      $LUsIds = [];
       $modules = [];
       $count = 0;
+      print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
+      // retrieve LU
       foreach ($documents as $key => $documentNode) {
-          print("Document - " . $documentNode->getName() . "\r\n");
           $document = $this->resourceManager->getResourceFromNode($documentNode);
           if(!empty($document)){
             $docIsLU = $document->getShowDescription() &&
               $document->getShowOverview() &&
               $document->getWidgetsPagination();
             if($docIsLU){
+              $LUs[$document->getId()] = $document;
+              $LUsIds[] = $document->getId();
               $parent = $documentNode->getParent();
               if(!empty($parent) &&
-                $parent->getResourceType()->getName() == "sidpt_document"
-              ){
+                  $parent->getResourceType()->getName() == "sidpt_document"){
                 $modules[$parent->getId()] = $parent;
               }
-              $this->documentManager->configureAsLearningUnit($document, false);
             }
           }
-          $count += 1;
-          if ($count % 10 === 0) {
-            $this->om->flush();
+      }
+      print("Memory pre flush/clear - " . (memory_get_usage() / 1024) . " KB\r\n");
+      $this->om->flush();
+      gc_collect_cycles();
+      //$this->om->clear();
+      print("Memory post flush/clear - " . (memory_get_usage() / 1024) . " KB\r\n");
+      print("LUs ids- " . print_r($LUsIds,true) . "\r\n");
+      // test with batch update : https://www.doctrine-project.org/projects/doctrine-orm/en/2.9/reference/batch-processing.html
+      $em = $this->om;
+      $batchSize = 20;
+      $i = 1;
+      $q = $em->createQuery('select doc from Sidpt\BinderBundle\Entity\Document doc where doc.id in (:ids)');
+      $q->setParameter('ids', $LUsIds);
+      foreach ($q->toIterable() as $lu) {
+          print("LU - " . $lu . "\r\n");
+          $this->documentManager->configureAsLearningUnit($lu, false);
+          ++$i;
+          if (($i % $batchSize) === 0) {
+              $em->flush(); // Executes all updates.
+              $em->clear(); // Detaches all objects from Doctrine!
+              print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
           }
       }
-      $this->om->flush();
+      $em->flush();
+      // foreach ($LUs as $resourceId => $lu) {
+      //   print("LU - " . $resourceId . "\r\n");
+        
+      //   $this->om->flush();
+      //   gc_collect_cycles();
+      //   print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
+      // }
+
 
       $count = 0;
       $courses = [];
