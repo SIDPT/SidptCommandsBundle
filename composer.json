@@ -1,15 +1,18 @@
 {
-    "name": "sidpt/commands-bundle",
-    "description": "SIDPT project commands",
+    "name": "sidpt/ipip-commands-bundle",
+    "description": "Symfony commands for the SIDPT/Claroline platform",
     "type": "claroline-plugin",
     "license": "GPL v3",
     "authors": [
         {
             "name": "Nicolas Pavie",
-            "email": "nicolas.pavie@braillenet.org"
+            "email": "pavie.nicolas@gmail.com"
         }
     ],
-    "require": {},
+    "require": {
+        "php": ">=7.2",
+        "symfony/console": "4.4.*"
+    },
     "autoload": {
         "psr-4": {
             "Sidpt\\CommandsBundle\\": "plugin/commands/"
