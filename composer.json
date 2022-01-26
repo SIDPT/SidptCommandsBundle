@@ -2,7 +2,7 @@
     "name": "sidpt/ipip-commands-bundle",
     "description": "Symfony commands for the SIDPT/Claroline platform",
     "type": "claroline-plugin",
-    "license": "GPL v3",
+    "license": "GPL-3.0-or-later",
     "authors": [
         {
             "name": "Nicolas Pavie",
