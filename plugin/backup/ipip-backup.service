@@ -1,10 +1,10 @@
 [Unit]
 Description=Backup ipip platform
-ConditionFileIsExecutable=/var/webapp/backup-claroline.sh
+ConditionFileIsExecutable=/path/to/backup-claroline.sh
 
 [Service]
 Type=oneshot
-ExecStart=/var/webapp/backup-claroline.sh
+ExecStart=/path/to/backup-claroline.sh
 
 [Install]
 WantedBy=multi-user.target
