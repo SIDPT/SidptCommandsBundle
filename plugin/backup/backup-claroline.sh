@@ -18,7 +18,7 @@ webUser=www
 
 # to be defined based on backup server
 remoteHost= #192.168.1.2
-remotePort= #12345
+remotePort=22
 remoteUser= #backup
 remotePath= #"~/ipip/"
 
@@ -130,7 +130,7 @@ then
    then
       # atempt to do remote backup of the archive
       echo "- Backing up also on secondary remote server"
-      scp "$destination/$(basename $folder).tar.xz" $remoteUser@$remoteHost:$remotePath
+      scp -P $remotePort "$destination/$(basename $folder).tar.xz" $remoteUser@$remoteHost:$remotePath
    fi
    echo "- Updating archive rights" 
    chown $webUser "$destination/$(basename $folder).tar.xz"
