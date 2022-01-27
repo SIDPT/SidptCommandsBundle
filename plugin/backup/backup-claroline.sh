@@ -10,17 +10,20 @@ folder="$(mktemp -d)/backup_claroline_$(date +%Y%m%d%H%M%S)"
 installFolder="/path/to/Claroline"
 database="claroline"
 destination="/path/to/backups"
+retentionInDays=60 #defaults to 60 days of retention
 verbose=
 full=0
 _help=0
 keep_folder=0
-webUser=www
+webUser=www #or www-data or root, depends on your configuration
 
-# to be defined based on backup server
-remoteHost= #192.168.1.2
-remotePort=22
-remoteUser= #backup
-remotePath= #"~/ipip/"
+# For security, i recommend setting a remote server backup
+# Note that this require ssh keys set betweens hosts for
+# the remote user to allow scp to connect without password
+remoteHost="" #192.168.1.2
+remotePort="" #12345
+remoteUser="" #backup
+remotePath="" #"~/ipip/"
 
 OPTIONS=i:o:d:b:fvh
 LONGOPTS=input:,output:,destination:,database:,full,verbose,help
@@ -103,9 +106,16 @@ if [[ $_help -ne 0 ]]; then
     exit 0;
 fi
 
+if [[ ! -d "$destination" ]]; then
+   echo "Creating folder $destination"
+   mkdir "$destination"
+fi
+
+echo "Cleaning local backups older than $retentionInDays days..."
+find "$destination" -mtime +$retentionInDays -exec rm -f {} \;
+
 mkdir "$folder"
-if [ -d "$folder" ]
-then
+if [ -d "$folder" ]; then
    echo "Backing up local app and database"
    echo "- Backing database into $folder/db.sql ..."
    mysqldump claroline > "$folder/db.sql"
@@ -126,11 +136,15 @@ then
        echo "- Removing folder $folder"
        rm $verbose -rf "$folder"
    fi
-   if [[ ! -z "$remoteHost" ]]
-   then
+   
+   if [ -n "$remoteHost" ]; then
       # atempt to do remote backup of the archive
       echo "- Backing up also on secondary remote server"
-      scp -P $remotePort "$destination/$(basename $folder).tar.xz" $remoteUser@$remoteHost:$remotePath
+      withPort=""
+      if [ -n "$remotePort" ];then
+         withPort="-P $remotePort"
+      fi
+      eval "scp $withPort" "$destination/$(basename $folder).tar.xz" $remoteUser@$remoteHost:$remotePath
    fi
    echo "- Updating archive rights" 
    chown $webUser "$destination/$(basename $folder).tar.xz"
