@@ -178,33 +178,16 @@ private function array_merge_recursive_distinct()
             $this->output->writeln(
                $bundle." - ". $domain.' - '.$field
             );
-            foreach($localesList as $locale){
-              $rowLocaledata = str_replace('\\\\','\\',$row[$locale]);//trim(, " \t\n\r\0\x0B\xC2\xA0");
-              if(!empty($rowLocaledata)){
-
-                if (!array_key_exists($locale, $fieldsTranslations[$bundle][$domain])) {
-                    $fieldsTranslations[$bundle][$domain][$locale] = [];
+            if(array_key_exists($bundle, $fieldsTranslations)){
+                foreach($localesList as $locale){
+                    $rowLocaledata = str_replace('\\\\','\\',$row[$locale]);//trim(, " \t\n\r\0\x0B\xC2\xA0");
+                    if(!empty($rowLocaledata)){
+                        if (!array_key_exists($locale, $fieldsTranslations[$bundle][$domain])) {
+                            $fieldsTranslations[$bundle][$domain][$locale] = [];
+                        }
+                        $fieldsTranslations[$bundle][$domain][$locale][$field] = $rowLocaledata;
+                    }
                 }
-
-
-                // $this->output->writeln(
-                //   $bundle." - ". $domain.' - '.$field.' = '.$rowLocaledata
-                // );
-                // $unflattenedField = $this->unflatten($field,".",$rowLocaledata);
-                //
-                // $fieldsTranslations[$bundle][$domain][$locale] = $this->array_merge_recursive_distinct(
-                //   $fieldsTranslations[$bundle][$domain][$locale],
-                //   $unflattenedField
-                // );
-                // if(array_key_exists($field, $fieldsTranslations[$bundle][$domain][$locale])){
-                //   if($domain == "icap_blog"){
-                //     $this->output->writeln("Replacing data in ".
-                //       $bundle." - ". $domain.' - '.$locale.' - '.$field.' : '.$fieldsTranslations[$bundle][$domain][$locale][$field].' - > '.$rowLocaledata
-                //     );
-                //   }
-                // }
-                $fieldsTranslations[$bundle][$domain][$locale][$field] = $rowLocaledata;
-              }
             }
         }
         $this->output->writeln("Saving back translations");
@@ -309,7 +292,7 @@ private function array_merge_recursive_distinct()
         $translationFiles = [];
 
         foreach ($bundles as $bundle) {
-            $parts = explode('\\', get_class($bundle['instance']));
+            $parts = explode('\\', get_class($bundle));
             $shortName = end($parts);
 
             if ($this->pluginManager->isLoaded($shortName)) {

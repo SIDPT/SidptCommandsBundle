@@ -137,7 +137,7 @@ class ExportTranslationsCommand extends Command
 
         try {
             $headers = array_merge(["bundle","domain","field"], $locales);
-            fputcsv($csv_file, $headers, ";");
+            fputcsv($csv_file, $headers, ",");
             foreach ($fieldsTranslations as $bundle => $bundleTranslations) {
                 foreach ($bundleTranslations as $domain => $domainTranslations) {
                     foreach ($domainTranslations as $field => $localeTranslations) {
@@ -156,7 +156,7 @@ class ExportTranslationsCommand extends Command
                             || (!$hasTranslations && $undefinedFilter)
                             || (!$complete && $missingsFilter)
                         ) {
-                            fputcsv($csv_file, $fields, ";");
+                            fputcsv($csv_file, $fields, ",");
                         }
 
                         // $line = "{$bundle};{$domain};{$field};";
@@ -195,7 +195,7 @@ class ExportTranslationsCommand extends Command
         $translationFiles = [];
 
         foreach ($bundles as $bundle) {
-            $parts = explode('\\', get_class($bundle['instance']));
+            $parts = explode('\\', get_class($bundle));
             $shortName = end($parts);
 
             if ($this->pluginManager->isLoaded($shortName)) {
