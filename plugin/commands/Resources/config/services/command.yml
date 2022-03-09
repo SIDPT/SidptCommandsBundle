@@ -2,6 +2,22 @@ services:
     _defaults:
         autowire: false
         autoconfigure: false
+    
+    Sidpt\CommandsBundle\Command\ContentBackupCommand:
+        arguments:
+            - '@doctrine.dbal.default_connection'
+            - '%kernel.project_dir%'
+            - '@Claroline\CoreBundle\Library\Configuration\PlatformConfigurationHandler'
+        tags:
+            - { name: 'console.command', command: 'sidpt:content:backup' }
+
+    Sidpt\CommandsBundle\Command\ContentRestoreCommand:
+        arguments:
+            - '@doctrine.dbal.default_connection'
+            - '%kernel.project_dir%'
+            - '@Claroline\InstallationBundle\Command\PlatformUpdateCommand'
+        tags:
+            - { name: 'console.command', command: 'sidpt:content:restore' }
 
     Sidpt\CommandsBundle\Command\ExportTranslationsCommand:
         arguments:

@@ -149,8 +149,7 @@ class SidptDataFormatCommand extends Command
 
     protected function configure()
     {
-        $this
-            ->setDescription('Set or update the courses hierarchy for the SIDPT project');
+        $this->setDescription('Set or update the courses hierarchy for the SIDPT project');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -165,7 +164,6 @@ class SidptDataFormatCommand extends Command
       $LUsIds = [];
       $modules = [];
       $count = 0;
-      print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
       // retrieve LU
       foreach ($documents as $key => $documentNode) {
           $document = $this->resourceManager->getResourceFromNode($documentNode);
@@ -184,13 +182,11 @@ class SidptDataFormatCommand extends Command
             }
           }
       }
-      print("Memory pre flush/clear - " . (memory_get_usage() / 1024) . " KB\r\n");
+      
       $this->om->flush();
       gc_collect_cycles();
-      //$this->om->clear();
-      print("Memory post flush/clear - " . (memory_get_usage() / 1024) . " KB\r\n");
-      print("LUs ids- " . print_r($LUsIds,true) . "\r\n");
-      // test with batch update : https://www.doctrine-project.org/projects/doctrine-orm/en/2.9/reference/batch-processing.html
+      
+      // batch update : https://www.doctrine-project.org/projects/doctrine-orm/en/2.9/reference/batch-processing.html
       $em = $this->om;
       $batchSize = 20;
       $i = 1;
@@ -203,17 +199,9 @@ class SidptDataFormatCommand extends Command
           if (($i % $batchSize) === 0) {
               $em->flush(); // Executes all updates.
               $em->clear(); // Detaches all objects from Doctrine!
-              print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
           }
       }
       $em->flush();
-      // foreach ($LUs as $resourceId => $lu) {
-      //   print("LU - " . $resourceId . "\r\n");
-        
-      //   $this->om->flush();
-      //   gc_collect_cycles();
-      //   print("Memory - " . (memory_get_usage() / 1024) . " KB\r\n");
-      // }
 
 
       $count = 0;
@@ -221,10 +209,7 @@ class SidptDataFormatCommand extends Command
       foreach ($modules as $key => $documentNode) {
           print("Module - " . $documentNode->getName() . "\r\n");
           $document = $this->resourceManager->getResourceFromNode($documentNode);
-          //$docIsLU = $document->getShowDescription() &&
-          //  $document->getShowOverview() &&
-          //  $document->getWidgetsPagination();
-          //if($docIsLU){
+          
           $parent = $documentNode->getParent();
           if(!empty($parent) &&
             $parent->getResourceType()->getName() == "sidpt_document"
@@ -232,8 +217,7 @@ class SidptDataFormatCommand extends Command
             $courses[$parent->getId()] = $parent;
           }
           $this->documentManager->configureAsModule($document, false);
-          //}
-          //
+          
           $count += 1;
           if ($count % 10 === 0) {
             $this->om->flush();
@@ -246,14 +230,8 @@ class SidptDataFormatCommand extends Command
       foreach ($courses as $key => $documentNode) {
           print("Course - " . $documentNode->getName() . "\r\n");
           $document = $this->resourceManager->getResourceFromNode($documentNode);
-          //$docIsLU = $document->getShowDescription() &&
-          //  $document->getShowOverview() &&
-          //  $document->getWidgetsPagination();
-          //if($docIsLU){
-
+          
           $this->documentManager->configureAsCourse($document, false);
-          //}
-          //}
           $count += 1;
           if ($count % 10 === 0) {
             $this->om->flush();

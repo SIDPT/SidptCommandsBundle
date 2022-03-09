@@ -5,6 +5,7 @@ namespace Sidpt\CommandsBundle\Command;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Claroline\CoreBundle\Library\Configuration\PlatformConfigurationHandler;
 
 
 
@@ -16,13 +17,17 @@ class ContentBackupCommand extends Command
 
     private $connection;
     private $projectFolder;
+    private $configHandler;
+
     
     public function __construct(
         $connection,
-        $projectFolder
+        $projectFolder,
+        PlatformConfigurationHandler $configHandler
     ){
         $this->connection = $connection;
         $this->projectFolder = $projectFolder;
+        $this->configHandler = $configHandler;
         parent::__construct();
     }
 
@@ -34,7 +39,7 @@ class ContentBackupCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
 
-        $backupDir = $this->projectFolder."/backups";
+        $backupDir = $this->configHandler->getParameter('backup.defaultLocation') ?? $this->projectFolder."/backups";
         if(!is_dir($backupDir)) {
             mkdir($backupDir);
         }
@@ -49,7 +54,7 @@ class ContentBackupCommand extends Command
         {
             return 1;
         }
-
+        $backupFileName = "backup_claroline_".$timestamp.".tar.xz";
         $path = sprintf('%s%s%s%s', $dir, DIRECTORY_SEPARATOR, "backup_claroline_", $timestamp);
         mkdir($path, 0700);
         
@@ -87,9 +92,27 @@ class ContentBackupCommand extends Command
         }
         system(escapeshellcmd("tar $verbose -C \"$path\" -cJf \"$path.tar.xz\" .")); #, $dumpOutput, $retval
         # move it to the backups folder
-        rename("$path.tar.xz", "$backupDir/".basename("$path.tar.xz") );
+        copy("$path.tar.xz", "$backupDir/".basename("$path.tar.xz") );
         
-        # if set, also backit up to a secondary location, possibly a remote one
+        # if set, also back it up to a other locations, possibly a remote one
+        $otherLocations = $this->configHandler->getParameter('backup.locationsURL') ?? [];
+        if(!empty($otherLocations)){
+            foreach ($otherLocations as $key => $url) {
+                $copyPath = $url.(str_ends_with($url,'/') ? '' : '/').$backupFileName ;
+                $scheme = explode(":",$url);
+                if(empty(array_intersect(["file", "ssh2.sftp", "ssh2.scp", "ftp", "ftps"],[$scheme]))){
+                    if(is_dir($url)){ // Check if the url is a simple path to an existing directory
+                        copy("$path.tar.xz",$copyPath);
+                    } else {
+                        $output->writeln($url." - directory not found or scheme not supported (only file://, ssh2.sftp://, ftp:// and ftps:// schemes are supported)");
+                    }
+                } else {
+                    copy("$path.tar.xz",$copyPath);
+                }
+                # code...
+            }
+        }
+
         return 0;
     }
 }

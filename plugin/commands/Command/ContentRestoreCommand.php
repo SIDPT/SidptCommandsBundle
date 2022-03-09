@@ -36,7 +36,7 @@ class ContentRestoreCommand extends Command
     protected function configure()
     {
         $this->setDescription('Restore the claroline platform content from an archive')
-            ->addArgument('backup_path', InputArgument::REQUIRED, 'path of the archive to restore');
+            ->addArgument('backup_path', InputArgument::REQUIRED, 'url of the archive (.tar.xz) to restore');
         $this->addOption(
                 'debug',
                 'd',
@@ -61,8 +61,10 @@ class ContentRestoreCommand extends Command
         $path = sprintf('%s%s%s%s', $dir, DIRECTORY_SEPARATOR, "restore_claroline_", $timestamp);
         mkdir($path, 0700);
 
+        $recoveredBackupPath = $path.".tar.xz";
+        copy($backup_path, $recoveredBackupPath);
         # untar archive
-        system(escapeshellcmd("tar xf $backup_path -C $path")); #, $dumpOutput, $retval
+        system(escapeshellcmd("tar xf $recoveredBackupPath -C $path")); #, $dumpOutput, $retval
         # check if the archive contains a db.sql and a files folder
         if(!(is_dir("$path/files") && is_file("$path/db.sql"))){
             $output->writeln("backup archive seems invalid (no db.sql file and/or files folder present in it");
