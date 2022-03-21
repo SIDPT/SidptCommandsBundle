@@ -10,7 +10,7 @@ use Claroline\CoreBundle\Library\Configuration\PlatformConfigurationHandler;
 
 
 /**
- * Set/update the hierarchy layout
+ * Backup content within an archive
  */
 class ContentBackupCommand extends Command
 {
@@ -19,7 +19,14 @@ class ContentBackupCommand extends Command
     private $projectFolder;
     private $configHandler;
 
-    
+    /**
+     * Constructor
+     * 
+     * @param mixed $connection Doctrine connection (@doctrine.dbal.default_connection)
+     * @param mixed $projectFolder Symfony project folder (%kernel.project_dir%)
+     * @param PlatformConfigurationHandler $configHandler configuration of the platform (values are stored in platform_options.json)
+     * @return ContentBackupCommand
+     */
     public function __construct(
         $connection,
         $projectFolder,

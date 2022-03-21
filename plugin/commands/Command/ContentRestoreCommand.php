@@ -13,7 +13,7 @@ use Claroline\InstallationBundle\Command\PlatformUpdateCommand;
 use Symfony\Component\Console\Input\ArrayInput;
 
 /**
- * Set/update the hierarchy layout
+ * Restore content from an archive
  */
 class ContentRestoreCommand extends Command
 {
@@ -22,6 +22,14 @@ class ContentRestoreCommand extends Command
     private $projectFolder;
     private $updateCommand;
 
+    /**
+     * Constructor
+     * 
+     * @param mixed $connection Doctrine connection (@doctrine.dbal.default_connection)
+     * @param mixed $projectFolder Symfony project folder (%kernel.project_dir%)
+     * @param PlatformUpdateCommand $updateCommand Claroline command to update the platform
+     * @return ContentRestoreCommand
+     */
     public function __construct(
         $connection,
         $projectFolder,

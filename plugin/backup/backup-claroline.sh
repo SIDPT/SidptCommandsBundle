@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Backup script for ipip platform installed on a production server
+# required to be launch on the server itself
+
 # Parsing args code from https://stackoverflow.com/a/29754866
 # More safety, by turning some bugs into errors.
 # Without `errexit` you don’t need ! and can replace
@@ -8,7 +12,14 @@ set -o errexit -o pipefail -o noclobber -o nounset
 # Default values
 folder="$(mktemp -d)/backup_claroline_$(date +%Y%m%d%H%M%S)"
 installFolder="/path/to/Claroline"
+#####
+# from config/parameters.yml
 database="claroline"
+mysqlHost="localhost"
+mysqlPort="3306"
+mysqlUser="claroline"
+mysqlPassword="claroline"
+####
 destination="/path/to/backups"
 retentionInDays=60 #defaults to 60 days of retention
 verbose=
@@ -16,6 +27,7 @@ full=0
 _help=0
 keep_folder=0
 webUser=www #or www-data or root, depends on your configuration
+dockerizedMysql=0
 
 # For security, i recommend setting a remote server backup
 # Note that this require ssh keys set betweens hosts for
@@ -117,20 +129,26 @@ find "$destination" -mtime +$retentionInDays -exec rm -f {} \;
 mkdir "$folder"
 if [ -d "$folder" ]; then
    echo "Backing up local app and database"
-   echo "- Backing database into $folder/db.sql ..."
-   mysqldump claroline > "$folder/db.sql"
+   if [[ $dockerizedMysql -ne 0 ]]; then
+        echo "- Backing database container '$installFolder../mysql' volume into '$folder/mysql' ..."
+        cp $verbose -r "$installFolder../mysql" "$folder/"
+   else
+        echo "- Backing database from $mysqlHost:$mysqlPort into $folder/db.sql ..."
+        mysqldump -h $mysqlHost --port=$mysqlPort -u $mysqlUser -p$mysqlPassword claroline > "$folder/db.sql"
+   fi
+   
    if [[ $full -ne 0 ]]; then
        echo "- Fully backing $installFolder into to $folder ..."
        cp $verbose -r "$installFolder" "$folder/"
    else
-            echo "- Backing files and config of $installFolder into $folder/$(basename $installFolder)"
+            echo "- Backing files of $installFolder into $folder/$(basename $installFolder)"
        mkdir -p "$folder/$(basename $installFolder)"
        cp $verbose -r "$installFolder/files" "$folder/$(basename $installFolder)/"
-       cp $verbose -r "$installFolder/config" "$folder/$(basename $installFolder)/"
+       #cp $verbose -r "$installFolder/config" "$folder/$(basename $installFolder)/"
    fi
    echo "- Compressing $folder content into to $folder.tar.xz ..."
    tar $verbose -C "$folder" -cJf "$folder.tar.xz" .
-   echo "- Moving to $folder.tar.xz to $destination"
+   echo "- Moving to $folder.tar.xz to $destination/$folder.tar.xz"
    mv $verbose "$folder.tar.xz" "$destination/"
    if [[ $keep_folder -ne 1 ]]; then
        echo "- Removing folder $folder"
@@ -146,7 +164,7 @@ if [ -d "$folder" ]; then
       fi
       eval "scp $withPort" "$destination/$(basename $folder).tar.xz" $remoteUser@$remoteHost:$remotePath
    fi
-   echo "- Updating archive rights" 
+   echo "- Updating archive rights to 440" 
    chown $webUser "$destination/$(basename $folder).tar.xz"
    # protecting the backup from accidental removal
    chmod 440 "$destination/$(basename $folder).tar.xz"

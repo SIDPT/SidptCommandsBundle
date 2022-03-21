@@ -81,7 +81,13 @@ class SidptDataFormatCommand extends Command
     private $documentManager;
 
     /**
+     * Constructor
      *
+     * @param ObjectManager $om Claroline object manage
+     * @param SerializerProvider $serializer Claroline serializer generic interface
+     * @param TagManager $tagManager Claroline tag manager
+     * @param ResourceManager $resourceManager Claroline resource manager
+     * @param DocumentManager $documentManager Sidpt document manager
      */
     public function __construct(
         ObjectManager $om,
