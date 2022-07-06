@@ -41,6 +41,7 @@ class ContentBackupCommand extends Command
 
         $backupDir = $this->configHandler->getParameter('backup.defaultLocation') ?? $this->projectFolder."/backups";
         if(!is_dir($backupDir)) {
+            $output->writeln("Creating $backupDir");
             mkdir($backupDir);
         }
 
@@ -54,8 +55,10 @@ class ContentBackupCommand extends Command
         {
             return 1;
         }
+        
         $backupFileName = "backup_claroline_".$timestamp.".tar.xz";
         $path = sprintf('%s%s%s%s', $dir, DIRECTORY_SEPARATOR, "backup_claroline_", $timestamp);
+        $output->writeln("Creating $path");
         mkdir($path, 0700);
         
         # dump the database to the temp folder
@@ -68,12 +71,12 @@ class ContentBackupCommand extends Command
             'password' => $this->connection->getPassword() ?? 'claroline',
             'name' => $this->connection->getDatabase() ?? 'claroline'
         ];
-        
+        $output->writeln("Backing up database to $path/db.sql ...");
         $verbose = $output->isVerbose() ? "-v" : "";
         if($output->isVerbose()){
-            $output->writeln(escapeshellcmd("mysqldump -h {$database['host']} --port={$database['port']} -u {$database['user']} -p{$database['password']} {$database['name']}") . " > '$path/db.sql'");
+            $output->writeln(escapeshellcmd("mysqldump --no-tablespaces -h {$database['host']} --port={$database['port']} -u {$database['user']} -p{$database['password']} {$database['name']}") . " > '$path/db.sql'");
         }
-        system(escapeshellcmd("mysqldump -h {$database['host']} --port={$database['port']} -u {$database['user']} -p{$database['password']} {$database['name']}") . " > '$path/db.sql'"); #, $dumpOutput, $retval
+        system(escapeshellcmd("mysqldump --no-tablespaces -h {$database['host']} --port={$database['port']} -u {$database['user']} -p{$database['password']} {$database['name']}") . " > '$path/db.sql'"); #, $dumpOutput, $retval
         
         $folderName = basename($this->projectFolder);
         # backup the claroline files directory in the temp folder
@@ -81,17 +84,20 @@ class ContentBackupCommand extends Command
         if(!is_dir("$path/$folderName")){
             mkdir("$path/$folderName");
         }
+        $output->writeln("Backing up {$this->projectFolder}/files folder to $path/ ...");
         if($output->isVerbose()){
             $output->writeln(escapeshellcmd("cp {$verbose} -r \"{$this->projectFolder}/files\" \"$path/\""));
         }
         system(escapeshellcmd("cp {$verbose} -r \"{$this->projectFolder}/files\" \"$path/\"")); #, $dumpOutput, $retval
         # compress the temp folder (using system tar instead of php extensions to get the )
         
+        $output->writeln("Archiving to $path.tar.xz ...");
         if($output->isVerbose()){
             $output->writeln(escapeshellcmd("tar $verbose -C \"$path\" -cJf \"$path.tar.xz\" ."));
         }
         system(escapeshellcmd("tar $verbose -C \"$path\" -cJf \"$path.tar.xz\" .")); #, $dumpOutput, $retval
         # move it to the backups folder
+        $output->writeln("Copying to $backupDir ...");
         copy("$path.tar.xz", "$backupDir/".basename("$path.tar.xz") );
         
         # if set, also back it up to a other locations, possibly a remote one
@@ -99,9 +105,11 @@ class ContentBackupCommand extends Command
         if(!empty($otherLocations)){
             foreach ($otherLocations as $key => $url) {
                 $copyPath = $url.(str_ends_with($url,'/') ? '' : '/').$backupFileName ;
+                $output->writeln("Copying to $copyPath ...");
                 $scheme = explode(":",$url);
                 if(empty(array_intersect(["file", "ssh2.sftp", "ssh2.scp", "ftp", "ftps"],[$scheme]))){
                     if(is_dir($url)){ // Check if the url is a simple path to an existing directory
+                        
                         copy("$path.tar.xz",$copyPath);
                     } else {
                         $output->writeln($url." - directory not found or scheme not supported (only file://, ssh2.sftp://, ftp:// and ftps:// schemes are supported)");
@@ -112,7 +120,7 @@ class ContentBackupCommand extends Command
                 # code...
             }
         }
-
+        $output->writeln("-- Finished -- ");
         return 0;
     }
 }
